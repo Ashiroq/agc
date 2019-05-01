@@ -205,6 +205,12 @@ int main(int argc, char** argv)
         }
     }
     else if(strcmp(argv[1], "add") == 0) {
+
+    }
+    else if(strcmp(argv[1], "commit") == 0) {
+
+    }
+    else if(strcmp(argv[1], "hash-object") == 0) {
         struct stat st = {0};
         if(stat(argv[2], &st) == -1) {
             fputs("fatal: cannot find file", stderr);
@@ -217,11 +223,21 @@ int main(int argc, char** argv)
         int err = addFile(argv[2]);
         return err;
     }
-    else if(strcmp(argv[1], "cat") == 0) {
+    // TODO: Make it write to stdout
+    else if(strcmp(argv[1], "cat-file") == 0) {
         FILE* src = fopen(argv[2], "rb");
         FILE* dest = fopen("testdest", "wb");
         int ret = inf(src, dest);
         return ret;
+    }
+    else if(strcmp(argv[1], "update-index") == 0) {
+
+    }
+    else if(strcmp(argv[1], "write-tree") == 0) {
+
+    }
+    else if(strcmp(argv[1], "commit-tree") == 0) {
+
     }
     else {
         printf("Invalid command");
