@@ -362,6 +362,33 @@ enum agc_error read_index(struct index *data)
     return AGC_SUCCESS;
 }
 
+enum agc_error add_to_index(struct index *data, struct entry *node)
+{
+    if(data == NULL) {
+        return AGC_STRUCT_ERROR;
+    }
+    struct entry *ptr = data->first;
+    if(ptr == NULL) {
+        data->first = node;
+    }
+    else {
+        while(ptr->next != NULL && memcmp(ptr->pathname, node->pathname, node->namelen) < 0) {
+            ptr = ptr->next;
+        }
+
+        /* searching by stage if equal */
+        while(ptr->next != NULL
+                && memcmp(ptr->pathname, node->pathname, node->namelen) == 0
+                && (ptr->flags & 0x3000) < (node->flags & 0x3000)) {
+            ptr = ptr->next;
+        }
+        node->next = ptr->next;
+        ptr->next = node;
+    }
+    ++data->num;
+    return AGC_SUCCESS;
+}
+
 int main(int argc, char **argv)
 {
     if(argc < 2) {
@@ -407,6 +434,14 @@ int main(int argc, char **argv)
     else if(strcmp(argv[1], "update-index") == 0) {
         struct index data;
         enum agc_error err = read_index(&data);
+        if(err != AGC_SUCCESS) {
+            return err;
+        }
+        /* building new node */
+        struct entry node;
+        // TODO: initialize node and add to data store
+        // Need to have its hash
+        err = add_to_index(&data, &node);
         if(err != AGC_SUCCESS) {
             return err;
         }
