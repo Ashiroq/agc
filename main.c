@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+/* used in zlib */
 #define CHUNK 16384
 
 // TODO: Trees
@@ -92,10 +93,11 @@ int def_with_header(FILE* source, FILE* dest, int level, const char* header, int
         return ret;
 
     /* deflating header */
-    char* hcopy = malloc(hsize * sizeof(hcopy[0]));
+    char* hcopy = malloc(hsize * sizeof hcopy[0]);
     strcpy(hcopy, header);
-    stream.next_in = hcopy;
+    stream.next_in = (unsigned char*)hcopy;
     stream.avail_in = hsize;
+    flush = strlen(hcopy) == 0 ? Z_FINISH : Z_NO_FLUSH;
     do {
         stream.avail_out = CHUNK;
         stream.next_out = out;
@@ -173,7 +175,7 @@ int storefile(const char* name)
         SHA1_Update(&ctx, buffer, amount);
     SHA1_Final(hash, &ctx);
 
-    char* hexhash = malloc((2 * SHA_DIGEST_LENGTH + 1) * sizeof(hexhash[0]));
+    char* hexhash = malloc((2 * SHA_DIGEST_LENGTH + 1) * sizeof hexhash[0]);
     for(int i = 0; i < SHA_DIGEST_LENGTH; i++)
         sprintf(hexhash + 2*i, "%02x", hash[i]);
 
@@ -202,10 +204,22 @@ int storefile(const char* name)
 }
 
 
+// TODO: Provide procedure to translate error codes to messages
+enum agc_error {
+    AGC_SUCCESS = 0,
+    AGC_NOT_ENOUGH_ARGS = 100,
+    AGC_FILE_NOT_FOUND = 101,
+    AGC_IO_ERROR = 102,
+    AGC_INVALID_INDEX = 103,
+    AGC_STRUCT_ERROR = 104
+};
+
+
 int main(int argc, char **argv)
 {
     if(argc < 2) {
         fputs("Usage: agc init/add filename", stderr);
+        return AGC_NOT_ENOUGH_ARGS;
     }
 
     if(strcmp(argv[1], "init") == 0) {
@@ -227,11 +241,11 @@ int main(int argc, char **argv)
         struct stat st = {0};
         if(stat(argv[2], &st) == -1) {
             fputs("fatal: cannot find file", stderr);
-            return 2;
+            return AGC_FILE_NOT_FOUND;
         }
         if(argc < 3) {
             fputs("Usage: agc init/add filename", stderr);
-            return 1;
+            return AGC_NOT_ENOUGH_ARGS;
         }
         int err = storefile(argv[2]);
         return err;
