@@ -16,9 +16,22 @@
 #define INDEX_VERSION 2
 #define INDEX_LOCATION ".git/index" /* change to .agc when ready */
 
+/* size constants for freading */
 #define SIGNATURE_SIZE 4
 #define VERSION_SIZE 4
 #define ENTRY_NUM_SIZE 4
+#define CTIME_SIZE 4
+#define CTIME_NSEC_SIZE 4
+#define MTIME_SIZE 4
+#define MTIME_NSEC_SIZE 4
+#define DEV_SIZE 4
+#define INO_SIZE 4
+#define MODE_SIZE 4
+#define UID_SIZE 4
+#define GID_SIZE 4
+#define SIZE_SIZE 4
+#define HASH_SIZE 20
+#define FLAGS_SIZE 2
 
 /* Decompress from file source to file dest until stream ends or EOF.
    inf() returns Z_OK on success, Z_MEM_ERROR if memory could not be
@@ -275,6 +288,74 @@ enum agc_error read_index(struct index *data)
             struct entry *en = malloc(sizeof en);
             en->next = NULL;
 
+            /* reading fields in order with endian translation */
+            fread(&en->st.st_ctime, 1, CTIME_SIZE, idxf);
+            en->st.st_ctime = be32toh(en->st.st_ctime);
+
+            /* what to do with all these constant integers? */
+            fread(&en->st.st_ctim.tv_nsec, 1, CTIME_NSEC_SIZE, idxf);
+            en->st.st_ctim.tv_nsec = be32toh(en->st.st_ctim.tv_nsec);
+
+            fread(&en->st.st_mtime, 1, MTIME_SIZE, idxf);
+            en->st.st_mtime = be32toh(en->st.st_mtime);
+
+            fread(&en->st.st_mtim.tv_nsec, 1, MTIME_NSEC_SIZE, idxf);
+            en->st.st_mtim.tv_nsec = be32toh(en->st.st_mtim.tv_nsec);
+
+            fread(&en->st.st_dev, 1, DEV_SIZE, idxf);
+            en->st.st_dev = be32toh(en->st.st_dev);
+
+            fread(&en->st.st_ino, 1, INO_SIZE, idxf);
+            en->st.st_ino = be32toh(en->st.st_ino);
+
+            fread(&en->mode, 1, MODE_SIZE, idxf);
+            en->mode = be32toh(en->mode);
+
+            fread(&en->st.st_uid, 1, UID_SIZE, idxf);
+            en->st.st_uid = be32toh(en->st.st_uid);
+
+            fread(&en->st.st_gid, 1, GID_SIZE, idxf);
+            en->st.st_gid = be32toh(en->st.st_gid);
+
+            fread(&en->st.st_size, 1, SIZE_SIZE, idxf);
+            en->st.st_size = be32toh(en->st.st_size);
+
+            fread(en->hash, 1, HASH_SIZE, idxf);
+
+            fread(&en->flags, 1, FLAGS_SIZE, idxf);
+            en->flags = be16toh(en->flags);
+
+            en->pathname = NULL;
+            size_t psize = 0;
+            en->namelen = getdelim(&en->pathname, &psize, '\0', idxf);
+
+            /* skipping padding null bytes */
+            unsigned char skipped_byte;
+            do {
+                fread(&skipped_byte, 1, 1, idxf);
+                /* skips one additional byte from next entry */
+            } while(!feof(idxf) && skipped_byte == 0);
+            fseek(idxf, -1L, SEEK_CUR);
+
+            if(data->first == NULL)
+                data->first = en;
+            else
+                ptr->next = en;
+            ptr = en;
+
+            /* just for debugging */
+            fprintf(stderr, "%o\n", ptr->mode);
+            fprintf(stderr, "flags: %x\n", ptr->flags);
+            fprintf(stderr, "pathname: %s\n", ptr->pathname);
+            fprintf(stderr, "hash: ");
+            for(int j = 0; j < 21; j++)
+                fprintf(stderr, "%x", ptr->hash[j]);
+            fprintf(stderr, "\n");
+
+            if(feof(idxf) && i + 1 < data->num) {
+                /* not enough entries */
+                return AGC_INVALID_INDEX;
+            }
         }
         fprintf(stderr, "version: %d\n", data->ver);
     }
