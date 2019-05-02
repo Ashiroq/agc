@@ -362,6 +362,15 @@ enum agc_error read_index(struct index *data)
     return AGC_SUCCESS;
 }
 
+/* Write index structure to file at INDEX_LOCATION according to git
+   index file format. */
+enum agc_error write_index(struct index *data)
+{
+    // TODO: This
+
+    return AGC_SUCCESS;
+}
+
 enum agc_error add_to_index(struct index *data, struct entry *node)
 {
     if(data == NULL) {
@@ -442,6 +451,11 @@ int main(int argc, char **argv)
         // TODO: initialize node and add to data store
         // Need to have its hash
         err = add_to_index(&data, &node);
+        if(err != AGC_SUCCESS) {
+            return err;
+        }
+        /* writing changes to file */
+        err = write_index(&data);
         if(err != AGC_SUCCESS) {
             return err;
         }
