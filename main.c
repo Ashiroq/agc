@@ -138,7 +138,19 @@ int def_with_header(FILE* source, FILE* dest, int level, const char* header, int
     return Z_OK;
 }
 
-int addFile(const char* name)
+int getheader(const char* name, const char* type, char* header, int* hsize)
+{
+    header = malloc(100 * sizeof header[0]);
+    struct stat st = {0};
+    int ret = stat(name, &st);
+    if(ret != 0)
+        return ret;
+    strcpy(header, type);
+    *hsize = sprintf(header + strlen(type) + 1, "%ld", st.st_size);
+    return 0;
+}
+
+int storefile(const char* name)
 {
     unsigned char hash[SHA_DIGEST_LENGTH];
     unsigned char buffer[CHUNK];
@@ -149,12 +161,13 @@ int addFile(const char* name)
     if(src == NULL)
         return 19;
     SHA1_Init(&ctx);
-    struct stat st = {0};
-    assert(stat(name, &st) == 0);
 
     /* calculating hash with added header */
-    char header[100];
-    int hsize = sprintf(header, "blob %d", st.st_size);
+    char* header = NULL;
+    int hsize;
+    int herror = getheader(name, "blob ", header, &hsize);
+    if(herror != 0)
+        return herror;
     SHA1_Update(&ctx, header, hsize + 1);               /* +1 because \0 is needed */
     while((amount = fread(buffer, 1, CHUNK, src)) != 0)
         SHA1_Update(&ctx, buffer, amount);
@@ -188,11 +201,11 @@ int addFile(const char* name)
     return ret;
 }
 
-int main(int argc, char** argv)
+
+int main(int argc, char **argv)
 {
     if(argc < 2) {
         fputs("Usage: agc init/add filename", stderr);
-        return 1;
     }
 
     if(strcmp(argv[1], "init") == 0) {
@@ -220,7 +233,7 @@ int main(int argc, char** argv)
             fputs("Usage: agc init/add filename", stderr);
             return 1;
         }
-        int err = addFile(argv[2]);
+        int err = storefile(argv[2]);
         return err;
     }
     // TODO: Make it write to stdout
