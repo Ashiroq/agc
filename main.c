@@ -7,11 +7,18 @@
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
+#include <endian.h>
 
 /* used in zlib */
 #define CHUNK 16384
 
-// TODO: Trees
+#define INDEX_SIGNATURE "DIRC"
+#define INDEX_VERSION 2
+#define INDEX_LOCATION ".git/index" /* change to .agc when ready */
+
+#define SIGNATURE_SIZE 4
+#define VERSION_SIZE 4
+#define ENTRY_NUM_SIZE 4
 
 /* Decompress from file source to file dest until stream ends or EOF.
    inf() returns Z_OK on success, Z_MEM_ERROR if memory could not be
@@ -203,6 +210,22 @@ int storefile(const char* name)
     return ret;
 }
 
+struct index {
+    char sig[5];
+    uint32_t ver;
+    uint32_t num;
+    struct entry *first;
+};
+
+struct entry {
+    struct stat st;
+    uint32_t mode;
+    unsigned char hash[21];
+    uint16_t flags;
+    char *pathname;
+    unsigned int namelen;
+    struct entry *next;
+};
 
 // TODO: Provide procedure to translate error codes to messages
 enum agc_error {
@@ -214,6 +237,49 @@ enum agc_error {
     AGC_STRUCT_ERROR = 104
 };
 
+enum agc_error read_index(struct index *data)
+{
+    FILE* idxf = fopen(INDEX_LOCATION, "r+b");
+    if(idxf == NULL) {
+        return AGC_IO_ERROR;
+    }
+    fread(data->sig, 1, SIGNATURE_SIZE, idxf);
+    data->sig[4] = '\0'; /* used for printing */
+    if(feof(idxf)) {
+        /* index is empty */
+        sprintf(data->sig, INDEX_SIGNATURE);
+        data->ver = INDEX_VERSION;
+        data->num = 0;
+        fprintf(stderr, "index empty\n");
+    }
+    else {
+        fread(&data->ver, 1, 4, idxf);
+        data->ver = be32toh(data->ver);
+        if(feof(idxf)) {
+            /* cannot read header, invalid format */
+            return AGC_INVALID_INDEX;
+        }
+
+        /* have to translate endian here and everywhere else */
+        /* in writing index file as well: htobe32 etc. */
+        fread(&data->num, 4, 1, idxf);
+        data->num = be32toh(data->num);
+        if(feof(idxf)) {
+            /* cannot read header, invalid format */
+            return AGC_INVALID_INDEX;
+        }
+        /* reading all existing entries into linked list */
+        struct entry* ptr = NULL;
+        data->first = NULL;
+        for(int i = 0; i < data->num; i++) {
+            struct entry *en = malloc(sizeof en);
+            en->next = NULL;
+
+        }
+        fprintf(stderr, "version: %d\n", data->ver);
+    }
+    return AGC_SUCCESS;
+}
 
 int main(int argc, char **argv)
 {
@@ -258,7 +324,11 @@ int main(int argc, char **argv)
         return ret;
     }
     else if(strcmp(argv[1], "update-index") == 0) {
-
+        struct index data;
+        enum agc_error err = read_index(&data);
+        if(err != AGC_SUCCESS) {
+            return err;
+        }
     }
     else if(strcmp(argv[1], "write-tree") == 0) {
 
