@@ -188,9 +188,12 @@ int getheader(const char *name, const char *type, char **header, size_t *hsize)
 }
 
 // TODO: Docs
-enum agc_error hash_object(const char *name, const char *header, const size_t headsize, char **outhash, size_t *hsize)
+enum agc_error hash_object(const char *name, const char *header, const size_t headsize, char **hash, size_t *hsize)
 {
-    unsigned char hash[SHA_DIGEST_LENGTH];
+    if(*hash == NULL) {
+        *hsize = SHA_DIGEST_LENGTH;
+        *hash = malloc(*hsize * sizeof **hash);
+    }
     unsigned char buffer[CHUNK];
     SHA_CTX ctx;
     int amount;
@@ -198,20 +201,13 @@ enum agc_error hash_object(const char *name, const char *header, const size_t he
 
     if(src == NULL)
         return AGC_IO_ERROR;
-    SHA1_Init(&ctx);
 
     /* calculating hash with added header */
-    SHA1_Update(&ctx, header, headsize + 1);               /* +1 because \0 is needed */
+    SHA1_Init(&ctx);
+    SHA1_Update(&ctx, header, headsize);
     while((amount = fread(buffer, 1, CHUNK, src)) != 0)
         SHA1_Update(&ctx, buffer, amount);
-    SHA1_Final(hash, &ctx);
-
-    if(*outhash == NULL) {
-        *hsize = 2 * SHA_DIGEST_LENGTH + 1;
-        *outhash = malloc(*hsize * sizeof **outhash);
-    }
-    for(int i = 0; i < SHA_DIGEST_LENGTH; i++)
-        sprintf(*outhash + 2*i, "%02x", hash[i]);
+    SHA1_Final(*hash, &ctx);
     return AGC_SUCCESS;
 }
 
