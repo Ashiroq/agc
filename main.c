@@ -294,15 +294,16 @@ enum agc_error read_index(struct index *data)
         /* reading all existing entries into linked list */
         struct entry* ptr = NULL;
         data->first = NULL;
+        // TODO: Minimize calls to file (read to buffer)
         for(int i = 0; i < data->num; i++) {
-            struct entry *en = malloc(sizeof en);
+            struct entry *en = malloc(sizeof *en); /* *en, NOT en */
             en->next = NULL;
+            long enbeg = ftell(idxf);
 
             /* reading fields in order with endian translation */
             fread(&en->st.st_ctime, 1, CTIME_SIZE, idxf);
             en->st.st_ctime = be32toh(en->st.st_ctime);
 
-            /* what to do with all these constant integers? */
             fread(&en->st.st_ctim.tv_nsec, 1, CTIME_NSEC_SIZE, idxf);
             en->st.st_ctim.tv_nsec = be32toh(en->st.st_ctim.tv_nsec);
 
@@ -340,12 +341,10 @@ enum agc_error read_index(struct index *data)
             en->namelen = getdelim(&en->pathname, &psize, '\0', idxf);
 
             /* skipping padding null bytes */
-            unsigned char skipped_byte;
-            do {
-                fread(&skipped_byte, 1, 1, idxf);
-                /* skips one additional byte from next entry */
-            } while(!feof(idxf) && skipped_byte == 0);
-            fseek(idxf, -1L, SEEK_CUR);
+            long enend = ftell(idxf);
+            unsigned char nullb;
+            long nullc = 8 - ((enend - enbeg) % 8);
+            fseek(idxf, nullc, SEEK_CUR);
 
             if(data->first == NULL)
                 data->first = en;
@@ -355,7 +354,11 @@ enum agc_error read_index(struct index *data)
 
             /* just for debugging */
             fprintf(stderr, "%o\n", ptr->mode);
-            fprintf(stderr, "flags: %x\n", ptr->flags);
+            fprintf(stderr, "dev: %d\n", ptr->st.st_dev);
+            fprintf(stderr, "inode: %d\n", ptr->st.st_ino);
+            fprintf(stderr, "uid: %d\n", ptr->st.st_uid);
+            fprintf(stderr, "gid: %d\n", ptr->st.st_gid);
+            fprintf(stderr, "size: %d\n", ptr->st.st_size);
             fprintf(stderr, "pathname: %s\n", ptr->pathname);
             fprintf(stderr, "hash: ");
             for(int j = 0; j < 21; j++)
@@ -368,7 +371,9 @@ enum agc_error read_index(struct index *data)
             }
         }
         fprintf(stderr, "version: %d\n", data->ver);
+        fprintf(stderr, "num: %d\n", data->num);
     }
+    fclose(idxf);
     return AGC_SUCCESS;
 }
 
@@ -472,13 +477,17 @@ int main(int argc, char **argv)
             return err;
         }
         /* building new node */
-        struct entry node;
-        // TODO: initialize node and add to data store
-        // Need to have its hash
-        err = add_to_index(&data, &node);
+        struct entry *node = malloc(sizeof *node);
+        const char *fname = argv[2];
+        node->namelen = strlen(fname);
+        node->pathname = malloc(node->namelen * sizeof *node->pathname);
+        strcpy(node->pathname, fname);
+        node->mode = 0100644;
+        err = add_to_index(&data, node);
         if(err != AGC_SUCCESS) {
             return err;
         }
+
         /* writing changes to file */
         err = write_index(&data);
         if(err != AGC_SUCCESS) {
