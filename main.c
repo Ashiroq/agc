@@ -215,26 +215,32 @@ enum agc_error hash_object(const char *name, const char *header, const size_t he
     return AGC_SUCCESS;
 }
 
-enum agc_error storefile(const char *name, const char *header, const size_t hsize, char *hash)
+// TODO: Docs
+enum agc_error storefile(const char *name, const char *header, const size_t headsize, char *hash)
 {
     /* building hash-based path for file */
     const char *storepath = OBJ_STORE_LOCATION;
     const size_t splen = strlen(storepath);
 
     // TODO: Explain this size calculation
-    char *path = malloc((splen + 2 * SHA_DIGEST_LENGTH + 2) * *path);
+    size_t psize = splen + 2 * SHA_DIGEST_LENGTH + 2;
+    char *path = malloc(psize * sizeof *path);
     memcpy(path + splen, hash, 2);            /* append directory name */
     path[15] = '/';
     struct stat st2 = {0};
     if(stat(path, &st2) == -1)
         mkdir(path, 0700);
     memcpy(path + splen + 3, hash + 2, 38);         /* append file name */
-    path[54] = '\0';
+    path[psize - 1] = '\0';
 
     /* file compression with header  */
     FILE *src = fopen(name, "r+b");
-    FILE* dest = fopen(path, "wb");
-    int ret = def_with_header(src, dest, Z_DEFAULT_COMPRESSION, header, hsize + 1);
+    if(src == NULL)
+        return AGC_IO_ERROR;
+    FILE *dest = fopen(path, "wb");
+    if(dest == NULL)
+        return AGC_IO_ERROR;
+    int ret = def_with_header(src, dest, Z_DEFAULT_COMPRESSION, header, headsize);
     fclose(src);
     fclose(dest);
     free(path);
@@ -449,7 +455,7 @@ int main(int argc, char **argv)
         hash_object(argv[2], header, headsize, &hash, &hsize);
 
         // TODO: How to parse parameter?
-        int err = storefile(argv[2], header, headsize, hash);
+//        int err = storefile(argv[2], header, headsize, hash);
         printf("%s\n", hash);
 
         free(header);
