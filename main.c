@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <endian.h>
+#include <errno.h>
 
 /* used in zlib */
 #define CHUNK 16384
@@ -550,6 +551,32 @@ int main(int argc, char **argv)
         node->pathname = malloc(node->namelen * sizeof *node->pathname);
         strcpy(node->pathname, fname);
         node->mode = 0100644;
+        struct stat st;
+        if(stat(node->pathname, &st) == -1) {
+            char *msg = strerror(errno);
+            fprintf(stderr, "error: %s\n", msg);
+            return AGC_FILE_NOT_FOUND;
+        }
+        node->st = st;
+
+        char *header = NULL;
+        size_t headsize = 0;
+        int headerr = getheader(fname, "blob ", &header, &headsize);
+        if(headerr != 0)
+            return headerr;
+
+        /* storing file by hash in data store */
+        // TODO: Store hash as pointer
+        char *hash = NULL;
+        size_t hsize = 0;
+        fprintf(stderr, "ERROR\n");
+        hash_object(fname, header, headsize, &hash, &hsize);
+        err = storefile(fname, header, headsize, hash);
+        free(header);
+
+        memcpy(node->hash, hash, HASH_SIZE * sizeof *hash);
+        free(hash);
+
         err = add_to_index(&data, node);
         if(err != AGC_SUCCESS) {
             return err;
