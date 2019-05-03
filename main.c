@@ -124,7 +124,7 @@ int def_with_header(FILE* source, FILE* dest, int level, const char* header, int
         return ret;
 
     /* deflating header */
-    char* hcopy = malloc(hsize * sizeof hcopy[0]);
+    char* hcopy = malloc(hsize * sizeof *hcopy);
     strcpy(hcopy, header);
     stream.next_in = (unsigned char*)hcopy;
     stream.avail_in = hsize;
@@ -171,15 +171,19 @@ int def_with_header(FILE* source, FILE* dest, int level, const char* header, int
     return Z_OK;
 }
 
-int getheader(const char* name, const char* type, char* header, size_t* hsize)
+int getheader(const char *name, const char *type, char **header, size_t *hsize)
 {
-    header = malloc(100 * sizeof header[0]);
+    if(*header == NULL) {
+        *header = malloc(100 * sizeof **header);
+    }
     struct stat st = {0};
     int ret = stat(name, &st);
     if(ret != 0)
         return ret;
-    strcpy(header, type);
-    *hsize = sprintf(header + strlen(type) + 1, "%ld", st.st_size);
+    strcpy(*header, type);
+    *hsize = strlen(type);
+    /* +1 \0 is header delimiter */
+    *hsize += sprintf(*header + *hsize, "%ld", st.st_size) + 1;
     return 0;
 }
 
@@ -436,7 +440,7 @@ int main(int argc, char **argv)
         }
         char *header = NULL;
         size_t headsize = 0;
-        int headerr = getheader(argv[2], "blob ", header, &headsize);
+        int headerr = getheader(argv[2], "blob ", &header, &headsize);
         if(headerr != 0)
             return headerr;
 
@@ -447,7 +451,10 @@ int main(int argc, char **argv)
         // TODO: How to parse parameter?
         int err = storefile(argv[2], header, headsize, hash);
         printf("%s\n", hash);
-        return err;
+
+        free(header);
+        free(hash);
+        return AGC_SUCCESS;
     }
     // TODO: Make it write to stdout
     else if(strcmp(argv[1], "cat-file") == 0) {
