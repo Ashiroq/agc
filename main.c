@@ -15,8 +15,9 @@
 #define INDEX_SIGNATURE "DIRC"
 #define INDEX_VERSION 2
 #define INDEX_LOCATION ".git/index" /* change to .agc when ready */
+#define OBJ_STORE_LOCATION ".agc/objects/"
 
-/* size constants for freading */
+/* size constants for freading, change requires changes in code */
 #define SIGNATURE_SIZE 4
 #define VERSION_SIZE 4
 #define ENTRY_NUM_SIZE 4
@@ -32,6 +33,16 @@
 #define SIZE_SIZE 4
 #define HASH_SIZE 20
 #define FLAGS_SIZE 2
+
+// TODO: Provide procedure to translate error codes to messages
+enum agc_error {
+    AGC_SUCCESS = 0,
+    AGC_NOT_ENOUGH_ARGS = 100,
+    AGC_FILE_NOT_FOUND = 101,
+    AGC_IO_ERROR = 102,
+    AGC_INVALID_INDEX = 103,
+    AGC_STRUCT_ERROR = 104
+};
 
 /* Decompress from file source to file dest until stream ends or EOF.
    inf() returns Z_OK on success, Z_MEM_ERROR if memory could not be
@@ -160,7 +171,7 @@ int def_with_header(FILE* source, FILE* dest, int level, const char* header, int
     return Z_OK;
 }
 
-int getheader(const char* name, const char* type, char* header, int* hsize)
+int getheader(const char* name, const char* type, char* header, size_t* hsize)
 {
     header = malloc(100 * sizeof header[0]);
     struct stat st = {0};
@@ -172,54 +183,57 @@ int getheader(const char* name, const char* type, char* header, int* hsize)
     return 0;
 }
 
-int storefile(const char* name)
+// TODO: Docs
+enum agc_error hash_object(const char *name, const char *header, const size_t headsize, char **outhash, size_t *hsize)
 {
     unsigned char hash[SHA_DIGEST_LENGTH];
     unsigned char buffer[CHUNK];
     SHA_CTX ctx;
     int amount;
-
     FILE* src = fopen(name, "rb");
+
     if(src == NULL)
-        return 19;
+        return AGC_IO_ERROR;
     SHA1_Init(&ctx);
 
     /* calculating hash with added header */
-    char* header = NULL;
-    int hsize;
-    int herror = getheader(name, "blob ", header, &hsize);
-    if(herror != 0)
-        return herror;
-    SHA1_Update(&ctx, header, hsize + 1);               /* +1 because \0 is needed */
+    SHA1_Update(&ctx, header, headsize + 1);               /* +1 because \0 is needed */
     while((amount = fread(buffer, 1, CHUNK, src)) != 0)
         SHA1_Update(&ctx, buffer, amount);
     SHA1_Final(hash, &ctx);
 
-    char* hexhash = malloc((2 * SHA_DIGEST_LENGTH + 1) * sizeof hexhash[0]);
+    if(*outhash == NULL) {
+        *hsize = 2 * SHA_DIGEST_LENGTH + 1;
+        *outhash = malloc(*hsize * sizeof **outhash);
+    }
     for(int i = 0; i < SHA_DIGEST_LENGTH; i++)
-        sprintf(hexhash + 2*i, "%02x", hash[i]);
+        sprintf(*outhash + 2*i, "%02x", hash[i]);
+    return AGC_SUCCESS;
+}
 
+enum agc_error storefile(const char *name, const char *header, const size_t hsize, char *hash)
+{
     /* building hash-based path for file */
-    char path[13 + 42] = ".agc/objects/";
-    memcpy(path+13, hexhash, 2);            /* append directory name */
+    const char *storepath = OBJ_STORE_LOCATION;
+    const size_t splen = strlen(storepath);
+
+    // TODO: Explain this size calculation
+    char *path = malloc((splen + 2 * SHA_DIGEST_LENGTH + 2) * *path);
+    memcpy(path + splen, hash, 2);            /* append directory name */
     path[15] = '/';
     struct stat st2 = {0};
     if(stat(path, &st2) == -1)
         mkdir(path, 0700);
-    memcpy(path+16, hexhash+2, 38);         /* append file name */
+    memcpy(path + splen + 3, hash + 2, 38);         /* append file name */
     path[54] = '\0';
 
-    printf("%s\n", hexhash);
-    free(hexhash);
-
-    FILE* dest = fopen(path, "wb");
-    /* go back to beginning of file after hashing */
-    rewind(src);
     /* file compression with header  */
+    FILE *src = fopen(name, "r+b");
+    FILE* dest = fopen(path, "wb");
     int ret = def_with_header(src, dest, Z_DEFAULT_COMPRESSION, header, hsize + 1);
-
     fclose(src);
     fclose(dest);
+    free(path);
     return ret;
 }
 
@@ -238,16 +252,6 @@ struct entry {
     char *pathname;
     unsigned int namelen;
     struct entry *next;
-};
-
-// TODO: Provide procedure to translate error codes to messages
-enum agc_error {
-    AGC_SUCCESS = 0,
-    AGC_NOT_ENOUGH_ARGS = 100,
-    AGC_FILE_NOT_FOUND = 101,
-    AGC_IO_ERROR = 102,
-    AGC_INVALID_INDEX = 103,
-    AGC_STRUCT_ERROR = 104
 };
 
 enum agc_error read_index(struct index *data)
@@ -430,7 +434,19 @@ int main(int argc, char **argv)
             fputs("Usage: agc init/add filename", stderr);
             return AGC_NOT_ENOUGH_ARGS;
         }
-        int err = storefile(argv[2]);
+        char *header = NULL;
+        size_t headsize = 0;
+        int headerr = getheader(argv[2], "blob ", header, &headsize);
+        if(headerr != 0)
+            return headerr;
+
+        char *hash = NULL;
+        size_t hsize = 0;
+        hash_object(argv[2], header, headsize, &hash, &hsize);
+
+        // TODO: How to parse parameter?
+        int err = storefile(argv[2], header, headsize, hash);
+        printf("%s\n", hash);
         return err;
     }
     // TODO: Make it write to stdout
