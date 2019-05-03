@@ -481,6 +481,20 @@ enum agc_error add_to_index(struct index *data, struct entry *node)
     return AGC_SUCCESS;
 }
 
+/* Frees memory allocated for entry list */
+void dealloc(struct index *data)
+{
+    struct entry *ptr = data->first;
+    struct entry *tmp;
+    data->num = 0;
+    while(ptr != NULL) {
+        tmp = ptr->next;
+        free(ptr->pathname);
+        free(ptr);
+        ptr = tmp;
+    }
+}
+
 int main(int argc, char **argv)
 {
     if(argc < 2) {
@@ -544,6 +558,10 @@ int main(int argc, char **argv)
         if(err != AGC_SUCCESS) {
             return err;
         }
+        if(argc < 3) {
+            return AGC_NOT_ENOUGH_ARGS;
+        }
+
         /* building new node */
         struct entry *node = malloc(sizeof *node);
         const char *fname = argv[2];
@@ -587,6 +605,9 @@ int main(int argc, char **argv)
         if(err != AGC_SUCCESS) {
             return err;
         }
+
+        /* free() memory allocated for entries */
+        dealloc(&data);
     }
     else if(strcmp(argv[1], "write-tree") == 0) {
 
