@@ -381,8 +381,75 @@ enum agc_error read_index(struct index *data)
    index file format. */
 enum agc_error write_index(struct index *data)
 {
-    // TODO: This
+    /* change to INDEX_LOCATION when ready */
+    FILE* idxf = fopen(".agc/index", "wb");
+    if(idxf == NULL) {
+        return AGC_IO_ERROR;
+    }
+    fwrite(data->sig, 1, SIGNATURE_SIZE, idxf);
+    uint32_t tmp32 = htobe32(data->ver);
+    fwrite(&tmp32, 1, VERSION_SIZE, idxf);
+    tmp32 = htobe32(data->num);
+    fwrite(&tmp32, 1, ENTRY_NUM_SIZE, idxf);
 
+    struct entry *ptr = data->first;
+    // TODO: Minimize calls to file (read to buffer)
+    for(int i = 0; i < data->num; i++, ptr = ptr->next) {
+        if(ptr == NULL) {
+            return AGC_INVALID_INDEX;
+        }
+        size_t enbeg = ftell(idxf);
+        fprintf(stderr, "enbeg: %d\n", enbeg);
+
+        tmp32 = htobe32(ptr->st.st_ctime);
+        fwrite(&tmp32, 1, CTIME_SIZE, idxf);
+
+        tmp32 = htobe32(ptr->st.st_ctim.tv_nsec);
+        fwrite(&tmp32, 1, CTIME_NSEC_SIZE, idxf);
+
+        tmp32 = htobe32(ptr->st.st_mtime);
+        fwrite(&tmp32, 1, MTIME_SIZE, idxf);
+
+        tmp32 = htobe32(ptr->st.st_mtim.tv_nsec);
+        fwrite(&tmp32, 1, MTIME_NSEC_SIZE, idxf);
+
+        tmp32 = htobe32(ptr->st.st_dev);
+        fwrite(&tmp32, 1, DEV_SIZE, idxf);
+
+        tmp32 = htobe32(ptr->st.st_ino);
+        fwrite(&tmp32, 1, INO_SIZE, idxf);
+
+        tmp32 = htobe32(ptr->mode);
+        fwrite(&tmp32, 1, MODE_SIZE, idxf);
+
+        tmp32 = htobe32(ptr->st.st_uid);
+        fwrite(&tmp32, 1, UID_SIZE, idxf);
+
+        tmp32 = htobe32(ptr->st.st_gid);
+        fwrite(&tmp32, 1, GID_SIZE, idxf);
+
+        tmp32 = htobe32(ptr->st.st_size);
+        fwrite(&tmp32, 1, SIZE_SIZE, idxf);
+
+        fwrite(ptr->hash, 1, HASH_SIZE, idxf);
+
+        /* clamping namelen to 0xFFF */
+        if(ptr->namelen < 0xFFF)
+            ptr->flags = (ptr->flags & 0xF) | (ptr->namelen & 0xFFF);
+        else
+            ptr->flags = (ptr->flags & 0xF) | 0xFFF;
+        uint16_t tmp16 = htobe16(ptr->flags);
+        fwrite(&tmp16, 1, FLAGS_SIZE, idxf);
+
+        fwrite(ptr->pathname, 1, ptr->namelen, idxf);
+        size_t enend = ftell(idxf);
+
+        /* adding null bytes to pad entry to multiple of 8 */
+        int nulc = 8 - ((enend - enbeg) % 8);
+        char nulb = 0x00;
+        fwrite(&nulb, 1, nulc, idxf);
+    }
+    fclose(idxf);
     return AGC_SUCCESS;
 }
 
