@@ -189,7 +189,7 @@ int getheader(const char *name, const char *type, char **header, size_t *hsize)
 }
 
 // TODO: Docs
-enum agc_error hash_object(const char *name, const char *header, const size_t headsize, char **hash, size_t *hsize)
+enum agc_error hash_object(const char *name, const char *header, const size_t headsize, unsigned char **hash, size_t *hsize)
 {
     if(*hash == NULL) {
         *hsize = SHA_DIGEST_LENGTH;
@@ -219,15 +219,18 @@ enum agc_error storefile(const char *name, const char *header, const size_t head
     const char *storepath = OBJ_STORE_LOCATION;
     const size_t splen = strlen(storepath);
 
-    // TODO: Explain this size calculation
+    /* One byte of hash translates to two bytes of hex string plus
+       base path and 2 characters for slashes */
     size_t psize = splen + 2 * SHA_DIGEST_LENGTH + 2;
     char *path = malloc(psize * sizeof *path);
-    memcpy(path + splen, hash, 2);            /* append directory name */
-    path[15] = '/';
+    strcpy(path, storepath);
+    snprintf(path + splen, 3, "%02hhx", hash[0]);   /* append directory name */
+    path[splen + 2] = '/';
     struct stat st2 = {0};
     if(stat(path, &st2) == -1)
         mkdir(path, 0700);
-    memcpy(path + splen + 3, hash + 2, 38);         /* append file name */
+    for(int i = 1; i < SHA_DIGEST_LENGTH; i++)      /* append file name */
+        snprintf(path + splen + 1 + 2 * i, 3, "%02hhx", hash[i]);
     path[psize - 1] = '\0';
 
     /* file compression with header  */
@@ -533,13 +536,16 @@ int main(int argc, char **argv)
         if(headerr != 0)
             return headerr;
 
-        char *hash = NULL;
+        unsigned char *hash = NULL;
         size_t hsize = 0;
         hash_object(argv[2], header, headsize, &hash, &hsize);
 
         // TODO: How to parse parameter?
 //        int err = storefile(argv[2], header, headsize, hash);
-        printf("%s\n", hash);
+//
+        for(int i = 0; i < SHA_DIGEST_LENGTH; i++)
+            printf("%02hhx", hash[i]);
+        printf("\n");
 
         free(header);
         free(hash);
@@ -585,9 +591,8 @@ int main(int argc, char **argv)
 
         /* storing file by hash in data store */
         // TODO: Store hash as pointer
-        char *hash = NULL;
+        unsigned char *hash = NULL;
         size_t hsize = 0;
-        fprintf(stderr, "ERROR\n");
         hash_object(fname, header, headsize, &hash, &hsize);
         err = storefile(fname, header, headsize, hash);
         free(header);
