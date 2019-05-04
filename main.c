@@ -35,14 +35,14 @@
 #define HASH_SIZE 20
 #define FLAGS_SIZE 2
 
-// TODO: Provide procedure to translate error codes to messages
+// TODO: Procedure to translate error codes to messages
 enum agc_error {
     AGC_SUCCESS = 0,
     AGC_NOT_ENOUGH_ARGS = 100,
     AGC_FILE_NOT_FOUND = 101,
     AGC_IO_ERROR = 102,
     AGC_INVALID_INDEX = 103,
-    AGC_STRUCT_ERROR = 104
+    AGC_NULL_PTR = 104
 };
 
 /* Decompress from file source to file dest until stream ends or EOF.
@@ -199,7 +199,6 @@ enum agc_error hash_object(const char *name, const char *header, const size_t he
     SHA_CTX ctx;
     int amount;
     FILE* src = fopen(name, "rb");
-
     if(src == NULL)
         return AGC_IO_ERROR;
 
@@ -460,7 +459,7 @@ enum agc_error write_index(struct index *data)
 enum agc_error add_to_index(struct index *data, struct entry *node)
 {
     if(data == NULL) {
-        return AGC_STRUCT_ERROR;
+        return AGC_NULL_PTR;
     }
     struct entry *ptr = data->first;
     if(ptr == NULL) {
