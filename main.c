@@ -256,7 +256,7 @@ struct index {
 struct entry {
     struct stat st;
     uint32_t mode;
-    unsigned char hash[21];
+    unsigned char *hash;
     uint16_t flags;
     char *pathname;
     unsigned int namelen;
@@ -402,7 +402,6 @@ enum agc_error write_index(struct index *data)
             return AGC_INVALID_INDEX;
         }
         size_t enbeg = ftell(idxf);
-        fprintf(stderr, "enbeg: %d\n", enbeg);
 
         tmp32 = htobe32(ptr->st.st_ctime);
         fwrite(&tmp32, 1, CTIME_SIZE, idxf);
@@ -589,15 +588,11 @@ int main(int argc, char **argv)
             return headerr;
 
         /* storing file by hash in data store */
-        // TODO: Store hash as pointer
-        unsigned char *hash = NULL;
+        node->hash = NULL;
         size_t hsize = 0;
-        hash_object(fname, header, headsize, &hash, &hsize);
-        err = storefile(fname, header, headsize, hash);
+        hash_object(fname, header, headsize, &node->hash, &hsize);
+        err = storefile(fname, header, headsize, node->hash);
         free(header);
-
-        memcpy(node->hash, hash, HASH_SIZE * sizeof *hash);
-        free(hash);
 
         err = add_to_index(&data, node);
         if(err != AGC_SUCCESS) {
