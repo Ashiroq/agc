@@ -609,7 +609,16 @@ int main(int argc, char **argv)
         dealloc(&data);
     }
     else if(strcmp(argv[1], "write-tree") == 0) {
+        struct index data;
+        enum agc_error agcerr = read_index(&data);
+        if(agcerr != AGC_SUCCESS) {
+            return agcerr;
+        }
 
+        // TODO: Create buffer with data formatted as in file,
+        // compress it (without saving it to file) and hash-save it.
+
+        dealloc(&data);
     }
     else if(strcmp(argv[1], "commit-tree") == 0) {
 
