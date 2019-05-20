@@ -540,7 +540,7 @@ int main(int argc, char **argv)
 
         // TODO: How to parse parameter?
 //        int err = storefile(argv[2], header, headsize, hash);
-//
+
         for(int i = 0; i < SHA_DIGEST_LENGTH; i++)
             printf("%02hhx", hash[i]);
         printf("\n");
@@ -549,11 +549,18 @@ int main(int argc, char **argv)
         free(hash);
         return AGC_SUCCESS;
     }
-    // TODO: Make it write to stdout
     else if(strcmp(argv[1], "cat-file") == 0) {
-        FILE* src = fopen(argv[2], "rb");
-        FILE* dest = fopen("testdest", "wb");
-        int ret = inf(src, dest);
+        char *storepath = OBJ_STORE_LOCATION;
+        int len = strlen(storepath);
+        char *path = malloc(sizeof *path * (len + 42));
+
+        strcpy(path, storepath);
+        memcpy(path + len, argv[2], 2);
+        path[len + 2] = '/';
+        memcpy(path + len + 3, argv[2] + 2, 38);
+        FILE* src = fopen(path, "rb");
+        int ret = inf(src, stdout);
+        free(path);
         return ret;
     }
     else if(strcmp(argv[1], "update-index") == 0) {
